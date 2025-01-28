@@ -3,11 +3,23 @@ pub mod game {
     const ASCII_HEIGHT: usize = 17;
 
     use crate::read_file::read_file::{read_file_content, ASCII_ART};
-    fn read_input() -> std::io::Result<String> {
-        println!("Guess character or a sentence: ");
-        let mut buffer = String::new();
-        std::io::stdin().read_line(&mut buffer)?;
-        return Ok(buffer);
+    fn read_input() -> std::io::Result<char> {
+        let result = loop {
+            println!("Guess a character: ");
+            let mut buffer = String::new();
+            if let Err(e) = std::io::stdin().read_line(&mut buffer) {
+                break Err(e);
+            }
+            let mut character = buffer.as_str().chars();
+            match character.next() {
+                Some(c) => break Ok(c),
+                None => {
+                    println!("No characters provided");
+                    continue;
+                }
+            };
+        };
+        result
     }
 
     fn display_hidden_word(correct_word: &str, correct_guesses: &Vec<char>) {
@@ -34,7 +46,7 @@ pub mod game {
         for correct in correct_word.chars() {
             for guess in correct_guesses {
                 if *guess == correct {
-                    correct_count += 1;
+                    correct_count += correct.len_utf8();
                 }
             }
         }
@@ -52,20 +64,19 @@ pub mod game {
 
     fn compare_characters(
         correct_guesses: &mut Vec<char>,
-        guess: &str,
+        guess: char,
         correct_word: &str,
     ) -> bool {
         let mut found_equal = false;
         for correct in correct_word.chars() {
-            for guess in guess.chars() {
-                if correct == guess && !is_already_guessed(guess, &correct_guesses) {
-                    correct_guesses.push(correct);
-                    found_equal = true;
-                } else if is_already_guessed(guess, &correct_guesses) {
-                    found_equal = true;
-                }
+            if correct == guess && !is_already_guessed(guess, &correct_guesses) {
+                correct_guesses.push(correct);
+                found_equal = true;
+            } else if is_already_guessed(guess, &correct_guesses) {
+                found_equal = true;
             }
         }
+
         return found_equal;
     }
 
@@ -128,24 +139,33 @@ pub mod game {
         }
     }
 
+    fn display_used_words(all_guesses: &Vec<char>) {
+        println!("Already guessed: ");
+        print!("[");
+        for guess in all_guesses {
+            print!("{} ", guess);
+        }
+        println!("]");
+    }
+
     pub fn start_hangman(correct_word: &str) -> std::io::Result<()> {
         let mut attempt_count = 6;
         let ascii_art_buffer = read_file_content(ASCII_ART)?;
         let ascii_art_array = write_ascii_string_to_array(&ascii_art_buffer);
         let mut correct_guesses: Vec<char> = Vec::new();
+        let mut all_guesses: Vec<char> = Vec::new();
         while attempt_count > 1 {
             display_hidden_word(correct_word, &correct_guesses);
             let input = read_input();
             std::process::Command::new("clear").status().unwrap();
             if let Ok(input) = input {
-                if input.len() > 2 {
-                    println!("You can guess only one character at a time.");
-                    reveal_ascii_art(attempt_count, &ascii_art_array);
-                    continue;
-                }
-                if !compare_characters(&mut correct_guesses, input.as_str(), correct_word) {
+                if !compare_characters(&mut correct_guesses, input, correct_word) {
                     attempt_count -= 1;
                 }
+                if !is_already_guessed(input, &all_guesses) {
+                    all_guesses.push(input);
+                }
+                display_used_words(&all_guesses);
 
                 if attempt_count < 6 {
                     reveal_ascii_art(attempt_count, &ascii_art_array);
